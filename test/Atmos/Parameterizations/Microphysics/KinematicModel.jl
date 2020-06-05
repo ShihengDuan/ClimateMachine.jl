@@ -44,7 +44,9 @@ using ClimateMachine.Thermodynamics:
     relative_humidity,
     TemperatureSHumEquil,
     TemperatureSHumNonEquil,
-    air_temperature
+    air_temperature,
+    latent_heat_fusion
+
 using ClimateMachine.Microphysics
 using ClimateMachine.MPIStateArrays
 using ClimateMachine.ODESolvers
@@ -52,7 +54,18 @@ using ClimateMachine.VariableTemplates
 using ClimateMachine.VTK
 
 using CLIMAParameters
-using CLIMAParameters.Planet: R_d, cp_d, cv_d, cv_v, T_0, e_int_v0, grav
+using CLIMAParameters.Planet:
+    R_d,
+    cp_d,
+    cv_d,
+    cv_v,
+    cv_l,
+    cv_i,
+    T_0,
+    T_freeze,
+    e_int_v0,
+    e_int_i0,
+    grav
 
 using CLIMAParameters.Atmos.Microphysics
 

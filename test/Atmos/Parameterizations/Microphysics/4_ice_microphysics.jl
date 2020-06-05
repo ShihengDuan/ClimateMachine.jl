@@ -35,6 +35,7 @@ function vars_state_auxiliary(m::KinematicModel, FT)
         S::FT
         RH::FT
         rain_w::FT
+        snow_w::FT
         # more diagnostics
         src_cloud_liq::FT
         src_cloud_ice::FT
@@ -46,7 +47,6 @@ function vars_state_auxiliary(m::KinematicModel, FT)
         src_ice_rain_accr::FT
         src_snow_rain_accr::FT
         src_rain_accr_sink::FT
-        src_snow_rain_accr::FT
         src_rain_evap::FT
         src_snow_subl::FT
         src_snow_melt::FT
@@ -78,7 +78,6 @@ function init_kinematic_eddy!(eddy_model, state, aux, (x, y, z), t)
         state.ρq_sno = ρ * FT(0)
 
         # velocity (derivative of streamfunction)
-        #TODO
         ρu::FT =
             dc.wmax * dc.xmax / dc.zmax *
             cos(π * z / dc.zmax) *
@@ -106,6 +105,7 @@ function kinematic_model_nodal_update_auxiliary_state!(
 )
     FT = eltype(state)
     _grav::FT = grav(param_set)
+    _T_freeze::FT = T_freeze(param_set)
 
     @inbounds begin
         # velocity
@@ -126,14 +126,10 @@ function kinematic_model_nodal_update_auxiliary_state!(
         # supersaturation
         q = PhasePartition(aux.q_tot, aux.q_liq, aux.q_ice)
         aux.T = air_temperature(param_set, aux.e_int, q)
-        aux.S =
-            max(
-                0,
-                aux.q_vap / q_vap_saturation(param_set, aux.T, state.ρ, q) -
-                FT(1),
-            ) * FT(100)
-        aux.RH =
-            aux.q_vap / q_vap_saturation(param_set, aux.T, state.ρ, q) * FT(100)
+        ts_neq = TemperatureSHumNonEquil(param_set, aux.T, state.ρ, q)
+        # TODO: add super_saturation method in moist thermo
+        aux.S = max(0, aux.q_vap / q_vap_saturation(ts_neq) - FT(1)) * FT(100)
+        aux.RH = relative_humidity(ts_neq)
 
         aux.rain_w =
             terminal_velocity(param_set, rain_param_set, state.ρ, aux.q_rai)
@@ -141,7 +137,13 @@ function kinematic_model_nodal_update_auxiliary_state!(
             terminal_velocity(param_set, snow_param_set, state.ρ, aux.q_sno)
 
         # more diagnostics
-        q_eq = PhasePartition_equil(param_set, aux.T, state.ρ, aux.q_tot)
+        q_eq = PhasePartition_equil(
+            param_set,
+            aux.T,
+            state.ρ,
+            aux.q_tot,
+            PhaseEquil,
+        )
 
         aux.src_cloud_liq = conv_q_vap_to_q_liq_ice(liquid_param_set, q_eq, q)
         aux.src_cloud_ice = conv_q_vap_to_q_liq_ice(ice_param_set, q_eq, q)
@@ -192,7 +194,7 @@ function kinematic_model_nodal_update_auxiliary_state!(
             state.ρ,
         )
 
-        if aux.T < T_freeze
+        if aux.T < _T_freeze
             aux.src_snow_rain_accr = accretion_snow_rain(
                 param_set,
                 snow_param_set,
@@ -230,7 +232,7 @@ function kinematic_model_nodal_update_auxiliary_state!(
         )
 
         aux.src_snow_melt =
-            snow_melt(param_set, snow_param_set, aux.q_sno, state.ρ)
+            snow_melt(param_set, snow_param_set, aux.q_sno, state.ρ, aux.T)
 
         aux.flag_cloud_liq = FT(0)
         aux.flag_cloud_ice = FT(0)
@@ -245,7 +247,7 @@ function kinematic_model_nodal_update_auxiliary_state!(
         if (aux.q_rai >= FT(0))
             aux.flag_rain = FT(1)
         end
-        if (aux.q_snow >= FT(0))
+        if (aux.q_sno >= FT(0))
             aux.flag_snow = FT(1)
         end
     end
@@ -350,11 +352,19 @@ function source!(
     direction,
 )
     FT = eltype(state)
+
     _grav::FT = grav(param_set)
+
     _e_int_v0::FT = e_int_v0(param_set)
-    _cv_v::FT = cv_v(param_set)
+    _e_int_i0::FT = e_int_i0(param_set)
+
     _cv_d::FT = cv_d(param_set)
+    _cv_v::FT = cv_v(param_set)
+    _cv_l::FT = cv_l(param_set)
+    _cv_i::FT = cv_i(param_set)
+
     _T_0::FT = T_0(param_set)
+    _T_freeze = T_freeze(param_set)
 
     @inbounds begin
         e_tot = state.ρe / state.ρ
@@ -370,9 +380,15 @@ function source!(
 
         q = PhasePartition(q_tot, q_liq, q_ice)
         T = air_temperature(param_set, e_int, q)
-        _T_freeze = T_freeze(param_set)
+        _Lf = latent_heat_fusion(param_set, T)
         # equilibrium state at current T
-        q_eq = PhasePartition_equil(param_set, T, state.ρ, q_tot)
+        q_eq = PhasePartition_equil(
+            param_set,
+            T,
+            state.ρ,
+            q_tot,
+            PhaseEquil,
+        )
 
         # zero out the source terms
         source.ρq_tot = FT(0)
@@ -392,12 +408,14 @@ function source!(
         source.ρq_liq -= acnv
         source.ρq_tot -= acnv
         source.ρq_rai += acnv
+        source.ρe -= acnv * _cv_l * (T - _T_0)
 
         # cloud ice -> snow
         acnv = ρ * conv_q_ice_to_q_sno(param_set, ice_param_set, q, state.ρ, T)
         source.ρq_ice -= acnv
         source.ρq_tot -= acnv
         source.ρq_sno += acnv
+        source.ρe -= acnv * (_cv_i * (T - _T_0) - _e_int_i0)
 
         # cloud liquid water + rain -> rain
         accr =
@@ -412,6 +430,7 @@ function source!(
         source.ρq_liq -= accr
         source.ρq_tot -= accr
         source.ρq_rai += accr
+        source.ρe -= accr * _cv_l * (T - _T_0)
 
         # cloud ice + snow -> snow
         accr =
@@ -424,8 +443,9 @@ function source!(
                 state.ρ,
             )
         source.ρq_ice -= accr
-        source.ρq_tot -= accr
+        source.ρq_tot  -= accr
         source.ρq_sno += accr
+        source.ρe -= accr * (_cv_i * (T - _T_0) - _e_int_i0)
 
         # cloud liquid water + snow -> snow or rain
         accr =
@@ -441,13 +461,13 @@ function source!(
             source.ρq_liq -= accr
             source.ρq_tot -= accr
             source.ρq_sno += accr
+            source.ρe -= accr * (_cv_i * (T - _T_0) - _e_int_i0)
         else
-            _Lf = latent_heat_fusion(param_set, T)
-            _cp_l = cp_l(param_set)
             source.ρq_liq -= accr
             source.ρq_tot -= accr
-            source.ρq_sno -= accr * (_cp_l / _Lf * (T - _T_freeze))
-            source.ρq_rai += accr * (FT(1) + _cp_l / _Lf * (T - _T_freeze))
+            source.ρq_sno -= accr * (_cv_l / _Lf * (T - _T_freeze))
+            source.ρq_rai += accr * (FT(1) + _cv_l / _Lf * (T - _T_freeze))
+            source.ρe += -accr * _cv_l * (FT(2) * T - _T_freeze - _T_0)
         end
 
         # cloud ice + rain -> snow
@@ -473,6 +493,8 @@ function source!(
         source.ρq_tot -= accr
         source.ρq_rai -= accr_rain_sink
         source.ρq_sno += accr + accr_rain_sink
+        source.ρe -= accr_rain_sink * _Lf +
+                     accr * (_cv_i * (T - _T_0) - _e_int_i0)
 
         # rain + snow -> snow or rain
         if T < _T_freeze
@@ -487,6 +509,7 @@ function source!(
                 )
             source.ρq_sno += accr
             source.ρq_rai -= accr
+            source.ρe += accr * _Lf
         else
             accr =
                 ρ * accretion_snow_rain(
@@ -499,6 +522,7 @@ function source!(
                 )
             source.ρq_rai += accr
             source.ρq_sno -= accr
+            source.ρe -= accr * _Lf
         end
 
         # rain -> vapour
@@ -513,6 +537,7 @@ function source!(
             )
         source.ρq_rai += evap
         source.ρq_tot -= evap
+        source.ρe -= evap * _cv_l * (T - _T_0)
 
         # snow -> vapour
         subl = evaporation_sublimation(
@@ -525,18 +550,17 @@ function source!(
         )
         source.ρq_sno += subl
         source.ρq_tot -= subl
+        source.ρe -= subl * (_cv_i * (T - _T_0) - _e_int_i0)
 
         # snow -> rain
-        melt = snow_melt(param_set, snow_param_set, q_sno, state.ρ)
+        melt = snow_melt(param_set, snow_param_set, q_sno, state.ρ, T)
+
         source.ρq_sno -= melt
         source.ρq_rai += melt
-
-        # TODO - add snow sinks to total energy
+        source.ρe -= melt * _Lf
 
         # TODO - test run and see if ice and snow are still zero
         # TODO - change initial condition and stream function, compare with Wojtek
-
-        source.ρe -= source.ρq_tot * (_e_int_v0 - (_cv_v - _cv_d) * (T - _T_0))
     end
 end
 
@@ -568,7 +592,7 @@ function main()
     dt = FT(5)
     #CFL = FT(1.75)
     filter_freq = 1
-    output_freq = 72
+    output_freq = 12 #72
 
     driver_config = config_kinematic_eddy(
         FT,
@@ -631,13 +655,14 @@ function main()
         GenericCallbacks.EveryXSimulationSteps(output_freq) do (init = false)
             mkpath("vtk/")
             outprefix = @sprintf(
-                "vtk/new_ex_3_mpirank%04d_step%04d",
+                "microphysics_test_4_mpirank%04d_step%04d",
                 MPI.Comm_rank(mpicomm),
                 step[1]
             )
-            @info "doing VTK output" outprefix
+            out_path_prefix = joinpath(vtkdir, out_dirname)
+            @info "doing VTK output" out_path_prefix
             writevtk(
-                outprefix,
+                out_path_prefix,
                 solver_config.Q,
                 solver_config.dg,
                 flattenednames(vars_state_conservative(model, FT)),
