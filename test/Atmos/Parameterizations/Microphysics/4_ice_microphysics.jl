@@ -12,6 +12,7 @@ function vars_state_conservative(m::KinematicModel, FT)
         ρq_ice::FT
         ρq_rai::FT
         ρq_sno::FT
+        one::FT
     end
 end
 
@@ -109,27 +110,25 @@ function init_kinematic_eddy!(eddy_model, state, aux, (x, y, z), t)
         _Z::FT = FT(15000)                        # TODO
         _X::FT = FT(10000)
         _xc::FT = FT(30000)
-        _A::FT = FT(4.8 * 1e4) / FT(2)            # TODO
-        _S::FT = FT(2.5 * 1e-2) * FT(1e-1) # TODO
+        _A::FT = FT(4.8 * 1e4)                    # TODO
+        _S::FT = FT(0) #FT(2.5 * 1e-2) * FT(1e-1) # TODO
         _ρ_00::FT = FT(1)
         ρu::FT = FT(0)
         ρw::FT = FT(0)
         # velocity (derivative of streamfunction)
         # This is actually different than what comes out from taking a
-        # derivative of Ψ from the paper. I'm not sure why.
+        # derivative of Ψ from the paper. I have sin(π/2/X(x-xc)).
         # This setup makes more sense to me though.
         #if z < _Z
-        if x >= (_xc + _X/FT(2))
+        if x >= (_xc + _X)
             ρu = -_A * ρ/_ρ_00 * FT(π)/_Z * cos(FT(π)/_Z * z) + _S * z
             ρw = FT(0)
-        elseif x <= (_xc - _X/FT(2))
+        elseif x <= (_xc - _X)
             ρu =  _A * ρ/_ρ_00 * FT(π)/_Z * cos(FT(π)/_Z * z)  + _S * z
             ρw = FT(0)
         else
-            #ρu = -_A * ρ/_ρ_00 * FT(π)/_Z   * cos(FT(π)/_Z * z) * sin(FT(π/2)/_X*(x - _xc)) + _S * z
-            #ρw =  _A * ρ/_ρ_00 * FT(π/2)/_X * sin(FT(π)/_Z * z) * cos(FT(π/2)/_X*(x - _xc))
-            ρu = -_A * ρ/_ρ_00 * FT(π)/_Z * cos(FT(π)/_Z * z) * sin(FT(π)/_X*(x - _xc)) + _S * z
-            ρw =  _A * ρ/_ρ_00 * FT(π)/_X * sin(FT(π)/_Z * z) * cos(FT(π)/_X*(x - _xc))
+            ρu = -_A * ρ/_ρ_00 * FT(π)/_Z   * cos(FT(π)/_Z * z) * sin(FT(π/2)/_X*(x - _xc)) + _S * z
+            ρw =  _A * ρ/_ρ_00 * FT(π/2)/_X * sin(FT(π)/_Z * z) * cos(FT(π/2)/_X*(x - _xc))
         end
         #else
         #    ρu = _S * z
@@ -146,6 +145,10 @@ function init_kinematic_eddy!(eddy_model, state, aux, (x, y, z), t)
         e_int::FT = internal_energy(param_set, T, q_pt_0)
         e_tot::FT = e_kin + e_pot + e_int
         state.ρe = ρ * e_tot
+
+        # one
+        state.one = FT(1)
+
     end
     return nothing
 end
@@ -340,6 +343,7 @@ function boundary_state!(
     state⁺.ρq_tot = state⁻.ρq_tot
     state⁺.ρq_liq = state⁻.ρq_liq
     state⁺.ρq_ice = state⁻.ρq_ice
+    state⁺.one = state⁻.one
 
     if bctype == 1
         state⁺.ρu = SVector(state⁻.ρu[1], FT(0), FT(0))
@@ -400,6 +404,11 @@ end
         snow_w = terminal_velocity(param_set, snow_param_set, state.ρ, q_sno)
 
         # advect moisture ...
+        flux.one = SVector(
+            state.ρu[1] * state.one / state.ρ,
+            FT(0),
+            state.ρu[3] * state.one / state.ρ,
+        )
         flux.ρq_tot = SVector(
             state.ρu[1] * state.ρq_tot / state.ρ,
             FT(0),
