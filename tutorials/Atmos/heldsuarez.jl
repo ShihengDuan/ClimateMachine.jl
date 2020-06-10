@@ -92,7 +92,7 @@ function held_suarez_forcing!(
     ##TODO: replace _p0 with dynamic surface pressure in Δσ calculations to
     #account for topography, but leave unchanged for calculations of σ involved
     #in T_equil
-    _p0 = 1.01325e5
+    _p0 = FT(1.01325e5)
     σ = p / _p0
     exner_p = σ^(_R_d / _cp_d)
     Δσ = (σ - σ_b) / (1 - σ_b)
@@ -221,12 +221,25 @@ driver_config = ClimateMachine.AtmosGCMConfiguration(
     model = model,
 );
 
-# The next lines set up the time stepper.
+# The next lines set up the time stepper. Since the resolution
+# in the vertical is much finer than in the horizontal,
+# the 'stiff' parts of the PDE will be in the vertical.
+# Setting `splitting_type = HEVISplitting()` will treat
+# vertical acoustic waves implicitly, while all other dynamics
+# are treated explicitly.
+ode_solver_type = ClimateMachine.IMEXSolverType(
+    splitting_type = HEVISplitting(),
+    implicit_model = AtmosAcousticGravityLinearModel,
+    implicit_solver = ManyColumnLU,
+    solver_method = ARK2GiraldoKellyConstantinescu,
+)
+
 solver_config = ClimateMachine.SolverConfiguration(
     timestart,
     timeend,
     driver_config,
     Courant_number = FT(0.2),
+    ode_solver_type = ode_solver_type,
     init_on_cpu = true,
     CFL_direction = HorizontalDirection(),
     diffdir = HorizontalDirection(),
@@ -241,7 +254,7 @@ filter = ExponentialFilter(solver_config.dg.grid, 0, filterorder)
 cbfilter = GenericCallbacks.EveryXSimulationSteps(1) do
     Filters.apply!(
         solver_config.Q,
-        1:size(solver_config.Q, 2),
+        AtmosFilterPerturbations(model),
         solver_config.dg.grid,
         filter,
     )

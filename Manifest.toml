@@ -36,12 +36,6 @@ git-tree-sha1 = "89182776a99b69964e995cc2f1e37b5fc3476d56"
 uuid = "4c555306-a7a7-4459-81d9-ec55ddd5c99a"
 version = "0.3.4"
 
-[[AxisAlgorithms]]
-deps = ["LinearAlgebra", "Random", "SparseArrays", "WoodburyMatrices"]
-git-tree-sha1 = "a4d07a1c313392a77042855df46c5f534076fab9"
-uuid = "13072b0f-2c55-5437-9ae7-d433b7a33950"
-version = "1.0.0"
-
 [[Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
@@ -199,9 +193,9 @@ uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[Distributions]]
 deps = ["FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns"]
-git-tree-sha1 = "5ad1c36bff608560df500e93aaeb5b86b4ad45ba"
+git-tree-sha1 = "78c4c32a2357a00a0a7d614880f02c2c6e1ec73c"
 uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
-version = "0.23.3"
+version = "0.23.4"
 
 [[DocStringExtensions]]
 deps = ["LibGit2", "Markdown", "Pkg", "Test"]
@@ -211,9 +205,9 @@ version = "0.8.1"
 
 [[DoubleFloats]]
 deps = ["GenericSVD", "GenericSchur", "LinearAlgebra", "Polynomials", "Printf", "Quadmath", "Random", "Requires", "SpecialFunctions"]
-git-tree-sha1 = "20abc3b0b00c54e952bea32f63dd292acf03d589"
+git-tree-sha1 = "7343616f9f04b2a4f247776fdb7d6f6b0dd62ead"
 uuid = "497a8b3b-efae-58df-a0af-a86822472b78"
-version = "1.1.10"
+version = "1.1.11"
 
 [[ExprTools]]
 git-tree-sha1 = "6f0517056812fd6aa3af23d4b70d5325a2ae4e95"
@@ -336,11 +330,12 @@ version = "1.5.1"
 
 [[LazyArrays]]
 deps = ["ArrayLayouts", "FillArrays", "LinearAlgebra", "MacroTools", "MatrixFactorizations", "StaticArrays"]
-git-tree-sha1 = "afc0b7026e58eb6eaf43df69530ce97b416d9e2c"
+git-tree-sha1 = "58f1186d445ac4aed3571d6eb1a79e3361f66cad"
 uuid = "5078a376-72f3-5289-bfd5-ec5146d43c02"
-version = "0.16.10"
+version = "0.16.12"
 
 [[LibGit2]]
+deps = ["Printf"]
 uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 
 [[Libdl]]
@@ -373,9 +368,9 @@ uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
 [[MPI]]
 deps = ["Distributed", "DocStringExtensions", "Libdl", "MPICH_jll", "MicrosoftMPI_jll", "OpenMPI_jll", "Pkg", "Random", "Requires", "Serialization", "Sockets"]
-git-tree-sha1 = "8e7b7b68a08efab64167c321f8cdf45cf9e9e38f"
+git-tree-sha1 = "0fc37a7feb384b51bd6e841ea6cfc424623aab74"
 uuid = "da04e1cc-30fd-572f-bb4f-1f8673147195"
-version = "0.14.2"
+version = "0.14.3"
 
 [[MPICH_jll]]
 deps = ["CompilerSupportLibraries_jll", "Libdl", "Pkg"]
@@ -485,12 +480,12 @@ version = "0.9.12"
 
 [[Parsers]]
 deps = ["Dates", "Test"]
-git-tree-sha1 = "f0abb338b4d00306500056a3fd44c221b8473ef2"
+git-tree-sha1 = "eb3e09940c0d7ae01b01d9291ebad7b081c844d3"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "1.0.4"
+version = "1.0.5"
 
 [[Pkg]]
-deps = ["Dates", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Test", "UUIDs"]
+deps = ["Dates", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "UUIDs"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 
 [[Polynomials]]
@@ -597,6 +592,12 @@ deps = ["LinearAlgebra", "Random", "Statistics"]
 git-tree-sha1 = "5c06c0aeb81bef54aed4b3f446847905eb6cbda0"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
 version = "0.12.3"
+
+[[StaticNumbers]]
+deps = ["Requires"]
+git-tree-sha1 = "8fedba0c674686bfa52dba5f68acf916b824f53a"
+uuid = "c5e4b96a-f99f-5557-8ed2-dc63ef9b5131"
+version = "0.3.2"
 
 [[Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
