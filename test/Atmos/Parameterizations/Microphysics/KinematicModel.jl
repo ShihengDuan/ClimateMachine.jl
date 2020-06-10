@@ -123,6 +123,15 @@ struct KinematicModelConfig{FT}
     p_1000::FT
     qt_0::FT
     z_0::FT
+    periodicity_x::Bool
+    periodicity_y::Bool
+    periodicity_z::Bool
+    idx_bc_left::Int
+    idx_bc_right::Int
+    idx_bc_front::Int
+    idx_bc_back::Int
+    idx_bc_bottom::Int
+    idx_bc_top::Int
 end
 
 struct KinematicModel{FT, PS, O, M, P, S, BC, IS, DC} <: BalanceLaw
@@ -197,6 +206,7 @@ function init_state_auxiliary!(
 
     @inbounds begin
         aux.p = p
+        aux.x = x
         aux.z = z
     end
 end
@@ -274,6 +284,15 @@ function config_kinematic_eddy(
     p_1000,
     qt_0,
     z_0,
+    periodicity_x,
+    periodicity_y,
+    periodicity_z,
+    idx_bc_left,
+    idx_bc_right,
+    idx_bc_front,
+    idx_bc_back,
+    idx_bc_bottom,
+    idx_bc_top,
 )
     # Choose explicit solver
     ode_solver = ClimateMachine.ExplicitSolverType(
@@ -290,13 +309,21 @@ function config_kinematic_eddy(
         FT(p_1000),
         FT(qt_0),
         FT(z_0),
+        Bool(periodicity_x),
+        Bool(periodicity_y),
+        Bool(periodicity_z),
+        Int(idx_bc_left),
+        Int(idx_bc_right),
+        Int(idx_bc_front),
+        Int(idx_bc_back),
+        Int(idx_bc_bottom),
+        Int(idx_bc_top),
     )
 
     # Set up the model
     model = KinematicModel{FT}(
         AtmosLESConfigType,
         param_set;
-        boundarycondition = nothing,
         init_state_conservative = init_kinematic_eddy!,
         data_config = kmc,
     )
@@ -309,7 +336,16 @@ function config_kinematic_eddy(
         FT(ymax),
         FT(zmax),
         param_set,
-        init_kinematic_eddy!;
+        init_kinematic_eddy!,
+        boundary = ((Int(idx_bc_left),   Int(idx_bc_right)),
+                    (Int(idx_bc_front),  Int(idx_bc_back)),
+                    (Int(idx_bc_bottom), Int(idx_bc_top))),
+        periodicity = (Bool(periodicity_x),
+                       Bool(periodicity_y),
+                       Bool(periodicity_z)),
+        xmin = FT(0),
+        ymin = FT(0),
+        zmin = FT(0),
         solver_type = ode_solver,
         model = model,
     )

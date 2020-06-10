@@ -13,6 +13,7 @@ function vars_state_auxiliary(m::KinematicModel, FT)
     @vars begin
         # defined in init_state_auxiliary
         p::FT
+        x::FT
         z::FT
         # defined in update_aux
         u::FT
@@ -181,6 +182,17 @@ function main()
     dt = 40
     output_freq = 9
 
+    # periodicity and boundary numbers
+    periodicity_x = true
+    periodicity_y = true
+    periodicity_z = false
+    idx_bc_left = 0
+    idx_bc_right = 0
+    idx_bc_front = 0
+    idx_bc_back = 0
+    idx_bc_bottom = 1
+    idx_bc_top = 2
+
     driver_config = config_kinematic_eddy(
         FT,
         N,
@@ -194,6 +206,15 @@ function main()
         p_1000,
         qt_0,
         z_0,
+        periodicity_x,
+        periodicity_y,
+        periodicity_z,
+        idx_bc_left,
+        idx_bc_right,
+        idx_bc_front,
+        idx_bc_back,
+        idx_bc_bottom,
+        idx_bc_top,
     )
     solver_config = ClimateMachine.SolverConfiguration(
         t_ini,
