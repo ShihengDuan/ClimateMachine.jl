@@ -124,13 +124,9 @@ function kinematic_model_nodal_update_auxiliary_state!(
             terminal_velocity(param_set, rain_param_set, state.ρ, aux.q_rai)
 
         # more diagnostics
-        q_eq = PhasePartition_equil(
-            param_set,
-            aux.T,
-            state.ρ,
-            aux.q_tot,
-            PhaseEquil,
-        )
+        ts_eq = TemperatureSHumEquil(param_set, aux.T, state.ρ, aux.q_tot)
+        q_eq = PhasePartition(ts_eq)
+
         aux.src_cloud_liq = conv_q_vap_to_q_liq_ice(liquid_param_set, q_eq, q)
         aux.src_cloud_ice = conv_q_vap_to_q_liq_ice(ice_param_set, q_eq, q)
         aux.src_acnv = conv_q_liq_to_q_rai(rain_param_set, aux.q_liq)
@@ -418,7 +414,7 @@ function main()
         GenericCallbacks.EveryXSimulationSteps(filter_freq) do (init = false)
             Filters.apply!(
                 solver_config.Q,
-                (ρq_liq_ind[1], ρq_ice_ind[1], ρq_rai_ind[1]),
+                (:ρq_liq, :ρq_ice, :ρq_rai),
                 solver_config.dg.grid,
                 TMARFilter(),
             )

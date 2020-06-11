@@ -185,9 +185,6 @@ function kinematic_model_nodal_update_auxiliary_state!(
         aux.T = air_temperature(param_set, aux.e_int, q)
         ts_neq = TemperatureSHumNonEquil(param_set, aux.T, state.ρ, q)
         # TODO: add super_saturation method in moist thermo
-        #if aux.T < FT(180)
-        #    @info aux.T, aux.x, aux.z, aux.e_int, aux.u, aux.w
-        #end
         aux.S = max(0, aux.q_vap / q_vap_saturation(ts_neq) - FT(1)) * FT(100)
         aux.RH = relative_humidity(ts_neq) * FT(100)
 
@@ -197,13 +194,8 @@ function kinematic_model_nodal_update_auxiliary_state!(
             terminal_velocity(param_set, snow_param_set, state.ρ, aux.q_sno)
 
         # more diagnostics
-        q_eq = PhasePartition_equil(
-            param_set,
-            aux.T,
-            state.ρ,
-            aux.q_tot,
-            PhaseEquil,
-        )
+        ts_eq = TemperatureSHumEquil(param_set, aux.T, state.ρ, aux.q_tot)
+        q_eq = PhasePartition(ts_eq)
 
         aux.src_cloud_liq = conv_q_vap_to_q_liq_ice(liquid_param_set, q_eq, q)
         aux.src_cloud_ice = conv_q_vap_to_q_liq_ice(ice_param_set, q_eq, q)
@@ -677,11 +669,11 @@ function main()
 
     # time stepping
     t_ini = FT(0)
-    t_end = FT(20 * 60) #FT(4 * 60 * 60)
-    dt = FT(10) #FT(15)
+    t_end = FT(15 * 60) #FT(4 * 60 * 60)
+    dt = FT(15)
     #CFL = FT(1.75)
     filter_freq = 1
-    output_freq = 6 * 2
+    output_freq = 4 * 3
 
     # periodicity and boundary numbers
     periodicity_x = false
@@ -751,7 +743,7 @@ function main()
         GenericCallbacks.EveryXSimulationSteps(filter_freq) do (init = false)
             Filters.apply!(
                 solver_config.Q,
-                (ρq_liq_ind[1], ρq_ice_ind[1], ρq_rai_ind[1], ρq_rai_ind[1]),
+                (:ρq_liq, :ρq_ice, :ρq_rai, :ρq_sno),
                 solver_config.dg.grid,
                 TMARFilter(),
             )
