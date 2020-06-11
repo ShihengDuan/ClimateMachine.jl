@@ -12,7 +12,6 @@ function vars_state_conservative(m::KinematicModel, FT)
         ρq_ice::FT
         ρq_rai::FT
         ρq_sno::FT
-        one::FT
     end
 end
 
@@ -107,12 +106,12 @@ function init_kinematic_eddy!(eddy_model, state, aux, (x, y, z), t)
         state.ρq_sno = ρ * FT(0)
 
         #https://journals.ametsoc.org/doi/pdf/10.1175/1520-0469%281998%29055%3C3283%3ATCRMOL%3E2.0.CO%3B2
-        _Z::FT = FT(15000)                        # TODO
+        _Z::FT = FT(15000 + 1e-6)                  # TODO
         _X::FT = FT(10000)
         _xc::FT = FT(30000)
-        _A::FT = FT(4.8 * 1e4)                    # TODO
-        _S::FT = FT(0) #FT(2.5 * 1e-2) * FT(1e-1) # TODO
-        _ρ_00::FT = FT(1)
+        _A::FT = FT(4.8 * 1e4) / FT(2.5)           # TODO
+        _S::FT = FT(2.5 * 1e-2) * FT(1e-2) / FT(2) # TODO
+        #_ρ_00::FT = FT(1)
         ρu::FT = FT(0)
         ρw::FT = FT(0)
         # velocity (derivative of streamfunction)
@@ -121,17 +120,17 @@ function init_kinematic_eddy!(eddy_model, state, aux, (x, y, z), t)
         # This setup makes more sense to me though.
         #if z < _Z
         if x >= (_xc + _X)
-            ρu = -_A * ρ/_ρ_00 * FT(π)/_Z * cos(FT(π)/_Z * z) + _S * z
+            ρu = -_A * FT(π)/_Z * cos(FT(π)/_Z * z) + _S * z
             ρw = FT(0)
         elseif x <= (_xc - _X)
-            ρu =  _A * ρ/_ρ_00 * FT(π)/_Z * cos(FT(π)/_Z * z)  + _S * z
+            ρu =  _A * FT(π)/_Z * cos(FT(π)/_Z * z)  + _S * z
             ρw = FT(0)
         else
-            ρu = -_A * ρ/_ρ_00 * FT(π)/_Z   * cos(FT(π)/_Z * z) * sin(FT(π/2)/_X*(x - _xc)) + _S * z
-            ρw =  _A * ρ/_ρ_00 * FT(π/2)/_X * sin(FT(π)/_Z * z) * cos(FT(π/2)/_X*(x - _xc))
+            ρu = -_A * FT(π)/_Z   * cos(FT(π)/_Z * z) * sin(FT(π/2)/_X*(x - _xc)) + _S * z
+            ρw =  _A * FT(π/2)/_X * sin(FT(π)/_Z * z) * cos(FT(π/2)/_X*(x - _xc))
         end
         #else
-        #    ρu = _S * z
+        #    ρu = _S * _Z
         #    ρw = FT(0)
         #end
 
@@ -145,10 +144,6 @@ function init_kinematic_eddy!(eddy_model, state, aux, (x, y, z), t)
         e_int::FT = internal_energy(param_set, T, q_pt_0)
         e_tot::FT = e_kin + e_pot + e_int
         state.ρe = ρ * e_tot
-
-        # one
-        state.one = FT(1)
-
     end
     return nothing
 end
@@ -194,7 +189,7 @@ function kinematic_model_nodal_update_auxiliary_state!(
         #    @info aux.T, aux.x, aux.z, aux.e_int, aux.u, aux.w
         #end
         aux.S = max(0, aux.q_vap / q_vap_saturation(ts_neq) - FT(1)) * FT(100)
-        aux.RH = relative_humidity(ts_neq)
+        aux.RH = relative_humidity(ts_neq) * FT(100)
 
         aux.rain_w =
             terminal_velocity(param_set, rain_param_set, state.ρ, aux.q_rai)
@@ -343,7 +338,7 @@ function boundary_state!(
     state⁺.ρq_tot = state⁻.ρq_tot
     state⁺.ρq_liq = state⁻.ρq_liq
     state⁺.ρq_ice = state⁻.ρq_ice
-    state⁺.one = state⁻.one
+    state⁺.ρ = state⁻.ρ
 
     if bctype == 1
         state⁺.ρu = SVector(state⁻.ρu[1], FT(0), FT(0))
@@ -361,9 +356,9 @@ function boundary_state!(
         state⁺.ρq_tot = state⁻.ρq_tot
     end
     if bctype == 6
-        state⁺.ρu -= 2 * dot(state⁻.ρu, n) .* SVector(n)
-        state⁺.ρe = state⁻.ρe
-        state⁺.ρq_tot = state⁻.ρq_tot
+        state⁺.ρe = aux⁻.ρe_init
+        state⁺.ρq_tot = aux⁻.ρq_tot_init
+        state⁺.ρu = SVector(state⁻.ρu[1], FT(0), state⁻.ρu[3])
     end
 end
 
@@ -404,10 +399,10 @@ end
         snow_w = terminal_velocity(param_set, snow_param_set, state.ρ, q_sno)
 
         # advect moisture ...
-        flux.one = SVector(
-            state.ρu[1] * state.one / state.ρ,
+        flux.ρ = SVector(
+            state.ρu[1],
             FT(0),
-            state.ρu[3] * state.one / state.ρ,
+            state.ρu[3],
         )
         flux.ρq_tot = SVector(
             state.ρu[1] * state.ρq_tot / state.ρ,
@@ -484,13 +479,8 @@ function source!(
         T = air_temperature(param_set, e_int, q)
         _Lf = latent_heat_fusion(param_set, T)
         # equilibrium state at current T
-        q_eq = PhasePartition_equil(
-            param_set,
-            T,
-            state.ρ,
-            q_tot,
-            PhaseEquil,
-        )
+        ts_eq = TemperatureSHumEquil(param_set, T, state.ρ, q_tot)
+        q_eq = PhasePartition(ts_eq)
 
         # zero out the source terms
         source.ρq_tot = FT(0)
@@ -506,160 +496,160 @@ function source!(
         source.ρq_ice += ρ * conv_q_vap_to_q_liq_ice(ice_param_set, q_eq, q)
 
         ## cloud liquid water -> rain
-        #acnv = ρ * conv_q_liq_to_q_rai(rain_param_set, q_liq)
-        #source.ρq_liq -= acnv
-        #source.ρq_tot -= acnv
-        #source.ρq_rai += acnv
-        #source.ρe -= acnv * _cv_l * (T - _T_0)
+        acnv = ρ * conv_q_liq_to_q_rai(rain_param_set, q_liq)
+        source.ρq_liq -= acnv
+        source.ρq_tot -= acnv
+        source.ρq_rai += acnv
+        source.ρe -= acnv * _cv_l * (T - _T_0)
 
         ## cloud ice -> snow
-        #acnv = ρ * conv_q_ice_to_q_sno(param_set, ice_param_set, q, state.ρ, T)
-        #source.ρq_ice -= acnv
-        #source.ρq_tot -= acnv
-        #source.ρq_sno += acnv
-        #source.ρe -= acnv * (_cv_i * (T - _T_0) - _e_int_i0)
+        acnv = ρ * conv_q_ice_to_q_sno(param_set, ice_param_set, q, state.ρ, T)
+        source.ρq_ice -= acnv
+        source.ρq_tot -= acnv
+        source.ρq_sno += acnv
+        source.ρe -= acnv * (_cv_i * (T - _T_0) - _e_int_i0)
 
-        ## cloud liquid water + rain -> rain
-        #accr =
-        #    ρ * accretion(
-        #        param_set,
-        #        liquid_param_set,
-        #        rain_param_set,
-        #        q_liq,
-        #        q_rai,
-        #        state.ρ,
-        #    )
-        #source.ρq_liq -= accr
-        #source.ρq_tot -= accr
-        #source.ρq_rai += accr
-        #source.ρe -= accr * _cv_l * (T - _T_0)
+        # cloud liquid water + rain -> rain
+        accr =
+            ρ * accretion(
+                param_set,
+                liquid_param_set,
+                rain_param_set,
+                q_liq,
+                q_rai,
+                state.ρ,
+            )
+        source.ρq_liq -= accr
+        source.ρq_tot -= accr
+        source.ρq_rai += accr
+        source.ρe -= accr * _cv_l * (T - _T_0)
 
-        ## cloud ice + snow -> snow
-        #accr =
-        #    ρ * accretion(
-        #        param_set,
-        #        ice_param_set,
-        #        snow_param_set,
-        #        q_ice,
-        #        q_sno,
-        #        state.ρ,
-        #    )
-        #source.ρq_ice -= accr
-        #source.ρq_tot  -= accr
-        #source.ρq_sno += accr
-        #source.ρe -= accr * (_cv_i * (T - _T_0) - _e_int_i0)
+        # cloud ice + snow -> snow
+        accr =
+            ρ * accretion(
+                param_set,
+                ice_param_set,
+                snow_param_set,
+                q_ice,
+                q_sno,
+                state.ρ,
+            )
+        source.ρq_ice -= accr
+        source.ρq_tot  -= accr
+        source.ρq_sno += accr
+        source.ρe -= accr * (_cv_i * (T - _T_0) - _e_int_i0)
 
-        ## cloud liquid water + snow -> snow or rain
-        #accr =
-        #    ρ * accretion(
-        #        param_set,
-        #        liquid_param_set,
-        #        snow_param_set,
-        #        q_liq,
-        #        q_sno,
-        #        state.ρ,
-        #    )
-        #if T < _T_freeze
-        #    source.ρq_liq -= accr
-        #    source.ρq_tot -= accr
-        #    source.ρq_sno += accr
-        #    source.ρe -= accr * (_cv_i * (T - _T_0) - _e_int_i0)
-        #else
-        #    source.ρq_liq -= accr
-        #    source.ρq_tot -= accr
-        #    source.ρq_sno -= accr * (_cv_l / _Lf * (T - _T_freeze))
-        #    source.ρq_rai += accr * (FT(1) + _cv_l / _Lf * (T - _T_freeze))
-        #    source.ρe += -accr * _cv_l * (FT(2) * T - _T_freeze - _T_0)
-        #end
+        # cloud liquid water + snow -> snow or rain
+        accr =
+            ρ * accretion(
+                param_set,
+                liquid_param_set,
+                snow_param_set,
+                q_liq,
+                q_sno,
+                state.ρ,
+            )
+        if T < _T_freeze
+            source.ρq_liq -= accr
+            source.ρq_tot -= accr
+            source.ρq_sno += accr
+            source.ρe -= accr * (_cv_i * (T - _T_0) - _e_int_i0)
+        else
+            source.ρq_liq -= accr
+            source.ρq_tot -= accr
+            source.ρq_sno -= accr * (_cv_l / _Lf * (T - _T_freeze))
+            source.ρq_rai += accr * (FT(1) + _cv_l / _Lf * (T - _T_freeze))
+            source.ρe += -accr * _cv_l * (FT(2) * T - _T_freeze - _T_0)
+        end
 
-        ## cloud ice + rain -> snow
-        #accr =
-        #    ρ * accretion(
-        #        param_set,
-        #        ice_param_set,
-        #        rain_param_set,
-        #        q_ice,
-        #        q_rai,
-        #        state.ρ,
-        #    )
-        #accr_rain_sink =
-        #    ρ * accretion_rain_sink(
-        #        param_set,
-        #        ice_param_set,
-        #        rain_param_set,
-        #        q_ice,
-        #        q_rai,
-        #        state.ρ,
-        #    )
-        #source.ρq_ice -= accr
-        #source.ρq_tot -= accr
-        #source.ρq_rai -= accr_rain_sink
-        #source.ρq_sno += accr + accr_rain_sink
-        #source.ρe -= accr_rain_sink * _Lf +
-        #             accr * (_cv_i * (T - _T_0) - _e_int_i0)
+        # cloud ice + rain -> snow
+        accr =
+            ρ * accretion(
+                param_set,
+                ice_param_set,
+                rain_param_set,
+                q_ice,
+                q_rai,
+                state.ρ,
+            )
+        accr_rain_sink =
+            ρ * accretion_rain_sink(
+                param_set,
+                ice_param_set,
+                rain_param_set,
+                q_ice,
+                q_rai,
+                state.ρ,
+            )
+        source.ρq_ice -= accr
+        source.ρq_tot -= accr
+        source.ρq_rai -= accr_rain_sink
+        source.ρq_sno += accr + accr_rain_sink
+        source.ρe -= accr_rain_sink * _Lf +
+                     accr * (_cv_i * (T - _T_0) - _e_int_i0)
 
-        ## rain + snow -> snow or rain
-        #if T < _T_freeze
-        #    accr =
-        #        ρ * accretion_snow_rain(
-        #            param_set,
-        #            snow_param_set,
-        #            rain_param_set,
-        #            q_sno,
-        #            q_rai,
-        #            state.ρ,
-        #        )
-        #    source.ρq_sno += accr
-        #    source.ρq_rai -= accr
-        #    source.ρe += accr * _Lf
-        #else
-        #    accr =
-        #        ρ * accretion_snow_rain(
-        #            param_set,
-        #            rain_param_set,
-        #            snow_param_set,
-        #            q_rai,
-        #            q_sno,
-        #            state.ρ,
-        #        )
-        #    source.ρq_rai += accr
-        #    source.ρq_sno -= accr
-        #    source.ρe -= accr * _Lf
-        #end
+        # rain + snow -> snow or rain
+        if T < _T_freeze
+            accr =
+                ρ * accretion_snow_rain(
+                    param_set,
+                    snow_param_set,
+                    rain_param_set,
+                    q_sno,
+                    q_rai,
+                    state.ρ,
+                )
+            source.ρq_sno += accr
+            source.ρq_rai -= accr
+            source.ρe += accr * _Lf
+        else
+            accr =
+                ρ * accretion_snow_rain(
+                    param_set,
+                    rain_param_set,
+                    snow_param_set,
+                    q_rai,
+                    q_sno,
+                    state.ρ,
+                )
+            source.ρq_rai += accr
+            source.ρq_sno -= accr
+            source.ρe -= accr * _Lf
+        end
 
-        ## rain -> vapour
-        #evap =
-        #    ρ * evaporation_sublimation(
-        #        param_set,
-        #        rain_param_set,
-        #        q,
-        #        q_rai,
-        #        state.ρ,
-        #        T,
-        #    )
-        #source.ρq_rai += evap
-        #source.ρq_tot -= evap
-        #source.ρe -= evap * _cv_l * (T - _T_0)
+        # rain -> vapour
+        evap =
+            ρ * evaporation_sublimation(
+                param_set,
+                rain_param_set,
+                q,
+                q_rai,
+                state.ρ,
+                T,
+            )
+        source.ρq_rai += evap
+        source.ρq_tot -= evap
+        source.ρe -= evap * _cv_l * (T - _T_0)
 
-        ## snow -> vapour
-        #subl = ρ * evaporation_sublimation(
-        #    param_set,
-        #    snow_param_set,
-        #    q,
-        #    q_sno,
-        #    state.ρ,
-        #    T,
-        #)
-        #source.ρq_sno += subl
-        #source.ρq_tot -= subl
-        #source.ρe -= subl * (_cv_i * (T - _T_0) - _e_int_i0)
+        # snow -> vapour
+        subl = ρ * evaporation_sublimation(
+            param_set,
+            snow_param_set,
+            q,
+            q_sno,
+            state.ρ,
+            T,
+        )
+        source.ρq_sno += subl
+        source.ρq_tot -= subl
+        source.ρe -= subl * (_cv_i * (T - _T_0) - _e_int_i0)
 
-        ## snow -> rain
-        #melt = ρ * snow_melt(param_set, snow_param_set, q_sno, state.ρ, T)
+        # snow -> rain
+        melt = ρ * snow_melt(param_set, snow_param_set, q_sno, state.ρ, T)
 
-        #source.ρq_sno -= melt
-        #source.ρq_rai += melt
-        #source.ρe -= melt * _Lf
+        source.ρq_sno -= melt
+        source.ρq_rai += melt
+        source.ρe -= melt * _Lf
     end
 end
 
@@ -676,7 +666,7 @@ function main()
     # Domain extents
     xmax = 90000
     ymax = 10
-    zmax = 15000
+    zmax = 16000
     # initial configuration
     wmax = FT(0.6)  # max velocity of the eddy  [m/s]
     θ_0 = FT(289) # init. theta value (const) [K]
@@ -687,11 +677,11 @@ function main()
 
     # time stepping
     t_ini = FT(0)
-    t_end = FT(60 * 60) #FT(4 * 60 * 60)
-    dt = FT(15)
+    t_end = FT(20 * 60) #FT(4 * 60 * 60)
+    dt = FT(10) #FT(15)
     #CFL = FT(1.75)
     filter_freq = 1
-    output_freq = 4 * 2
+    output_freq = 6 * 2
 
     # periodicity and boundary numbers
     periodicity_x = false
@@ -761,7 +751,7 @@ function main()
         GenericCallbacks.EveryXSimulationSteps(filter_freq) do (init = false)
             Filters.apply!(
                 solver_config.Q,
-                (ρq_liq_ind[1], ρq_ice_ind[1], ρq_rai_ind[1]),
+                (ρq_liq_ind[1], ρq_ice_ind[1], ρq_rai_ind[1], ρq_rai_ind[1]),
                 solver_config.dg.grid,
                 TMARFilter(),
             )
