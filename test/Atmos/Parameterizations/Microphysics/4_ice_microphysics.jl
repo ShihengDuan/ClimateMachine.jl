@@ -71,25 +71,130 @@ function init_kinematic_eddy!(eddy_model, state, aux, (x, y, z), t)
     @inbounds begin
 
         # sounding data based on GATE III for moisture...
-        z_in = [ 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5,
-                 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0,10.5, 11.0, 11.5,
-                 12.0, 12.5, 13.0, 13.5, 14.0, 14.5, 15.0, 15.5, 16.0, 16.5,
-                 17.0, 17.5, 18.0, 27.0] * 1000.0
-        r_in = [16.5, 16.5, 13.5, 12.0, 10.0, 8.7, 7.1, 6.1, 5.2, 4.5, 3.6,
-                3.0, 2.3, 1.75, 1.3, 0.9, 0.5, 0.25, 0.125, 0.065, 0.003,
-                0.0015, 0.0007, 0.0003, 0.0001, 0.0001, 0.0001, 0.0001,
-                0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001,
-                0.0001, 0.0001, 0.0001] / 1000
+        z_in =
+            [
+                0.0,
+                0.5,
+                1.0,
+                1.5,
+                2.0,
+                2.5,
+                3.0,
+                3.5,
+                4.0,
+                4.5,
+                5.0,
+                5.5,
+                6.0,
+                6.5,
+                7.0,
+                7.5,
+                8.0,
+                8.5,
+                9.0,
+                9.5,
+                10.0,
+                10.5,
+                11.0,
+                11.5,
+                12.0,
+                12.5,
+                13.0,
+                13.5,
+                14.0,
+                14.5,
+                15.0,
+                15.5,
+                16.0,
+                16.5,
+                17.0,
+                17.5,
+                18.0,
+                27.0,
+            ] * 1000.0
+        r_in =
+            [
+                16.5,
+                16.5,
+                13.5,
+                12.0,
+                10.0,
+                8.7,
+                7.1,
+                6.1,
+                5.2,
+                4.5,
+                3.6,
+                3.0,
+                2.3,
+                1.75,
+                1.3,
+                0.9,
+                0.5,
+                0.25,
+                0.125,
+                0.065,
+                0.003,
+                0.0015,
+                0.0007,
+                0.0003,
+                0.0001,
+                0.0001,
+                0.0001,
+                0.0001,
+                0.0001,
+                0.0001,
+                0.0001,
+                0.0001,
+                0.0001,
+                0.0001,
+                0.0001,
+                0.0001,
+                0.0001,
+                0.0001,
+            ] / 1000
         qt_in = r_in ./ (r_in .+ 1)
         # ... and temperature
-        T_in = [299.184, 294.836, 294.261, 288.773, 276.698, 265.004, 253.930,
-                243.662, 227.674, 214.266, 207.757, 201.973, 198.278, 197.414,
-                198.110, 198.110]
-        z_T_in = [0.0, 0.492, 0.700, 1.698, 3.928, 6.039, 7.795, 9.137, 11.055,
-                  12.645, 13.521, 14.486, 15.448, 16.436, 17.293, 22.0] * 1000
+        T_in = [
+            299.184,
+            294.836,
+            294.261,
+            288.773,
+            276.698,
+            265.004,
+            253.930,
+            243.662,
+            227.674,
+            214.266,
+            207.757,
+            201.973,
+            198.278,
+            197.414,
+            198.110,
+            198.110,
+        ]
+        z_T_in =
+            [
+                0.0,
+                0.492,
+                0.700,
+                1.698,
+                3.928,
+                6.039,
+                7.795,
+                9.137,
+                11.055,
+                12.645,
+                13.521,
+                14.486,
+                15.448,
+                16.436,
+                17.293,
+                22.0,
+            ] * 1000
 
-        init_qt = LinearInterpolation(z_in, qt_in, extrapolation_bc=Flat());
-        init_T = LinearInterpolation(z_T_in, T_in, extrapolation_bc=Flat());
+        init_qt = LinearInterpolation(z_in, qt_in, extrapolation_bc = Flat())
+        init_T = LinearInterpolation(z_T_in, T_in, extrapolation_bc = Flat())
 
         # density
         q_pt_0 = PhasePartition(init_qt(z))
@@ -120,14 +225,20 @@ function init_kinematic_eddy!(eddy_model, state, aux, (x, y, z), t)
         # This setup makes more sense to me though.
         #if z < _Z
         if x >= (_xc + _X)
-            ρu = -_A * FT(π)/_Z * cos(FT(π)/_Z * z) + _S * z
+            ρu = -_A * FT(π) / _Z * cos(FT(π) / _Z * z) + _S * z
             ρw = FT(0)
         elseif x <= (_xc - _X)
-            ρu =  _A * FT(π)/_Z * cos(FT(π)/_Z * z)  + _S * z
+            ρu = _A * FT(π) / _Z * cos(FT(π) / _Z * z) + _S * z
             ρw = FT(0)
         else
-            ρu = -_A * FT(π)/_Z   * cos(FT(π)/_Z * z) * sin(FT(π/2)/_X*(x - _xc)) + _S * z
-            ρw =  _A * FT(π/2)/_X * sin(FT(π)/_Z * z) * cos(FT(π/2)/_X*(x - _xc))
+            ρu =
+                -_A * FT(π) / _Z *
+                cos(FT(π) / _Z * z) *
+                sin(FT(π / 2) / _X * (x - _xc)) + _S * z
+            ρw =
+                _A * FT(π / 2) / _X *
+                sin(FT(π) / _Z * z) *
+                cos(FT(π / 2) / _X * (x - _xc))
         end
         #else
         #    ρu = _S * _Z
@@ -391,11 +502,7 @@ end
         snow_w = terminal_velocity(param_set, snow_param_set, state.ρ, q_sno)
 
         # advect moisture ...
-        flux.ρ = SVector(
-            state.ρu[1],
-            FT(0),
-            state.ρu[3],
-        )
+        flux.ρ = SVector(state.ρu[1], FT(0), state.ρu[3])
         flux.ρq_tot = SVector(
             state.ρu[1] * state.ρq_tot / state.ρ,
             FT(0),
@@ -527,7 +634,7 @@ function source!(
                 state.ρ,
             )
         source.ρq_ice -= accr
-        source.ρq_tot  -= accr
+        source.ρq_tot -= accr
         source.ρq_sno += accr
         source.ρe -= accr * (_cv_i * (T - _T_0) - _e_int_i0)
 
@@ -577,8 +684,8 @@ function source!(
         source.ρq_tot -= accr
         source.ρq_rai -= accr_rain_sink
         source.ρq_sno += accr + accr_rain_sink
-        source.ρe -= accr_rain_sink * _Lf +
-                     accr * (_cv_i * (T - _T_0) - _e_int_i0)
+        source.ρe -=
+            accr_rain_sink * _Lf + accr * (_cv_i * (T - _T_0) - _e_int_i0)
 
         # rain + snow -> snow or rain
         if T < _T_freeze
@@ -624,14 +731,15 @@ function source!(
         source.ρe -= evap * _cv_l * (T - _T_0)
 
         # snow -> vapour
-        subl = ρ * evaporation_sublimation(
-            param_set,
-            snow_param_set,
-            q,
-            q_sno,
-            state.ρ,
-            T,
-        )
+        subl =
+            ρ * evaporation_sublimation(
+                param_set,
+                snow_param_set,
+                q,
+                q_sno,
+                state.ρ,
+                T,
+            )
         source.ρq_sno += subl
         source.ρq_tot -= subl
         source.ρe -= subl * (_cv_i * (T - _T_0) - _e_int_i0)

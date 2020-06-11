@@ -55,17 +55,7 @@ using ClimateMachine.VTK
 
 using CLIMAParameters
 using CLIMAParameters.Planet:
-    R_d,
-    cp_d,
-    cv_d,
-    cv_v,
-    cv_l,
-    cv_i,
-    T_0,
-    T_freeze,
-    e_int_v0,
-    e_int_i0,
-    grav
+    R_d, cp_d, cv_d, cv_v, cv_l, cv_i, T_0, T_freeze, e_int_v0, e_int_i0, grav
 
 using CLIMAParameters.Atmos.Microphysics
 
@@ -337,12 +327,16 @@ function config_kinematic_eddy(
         FT(zmax),
         param_set,
         init_kinematic_eddy!,
-        boundary = ((Int(idx_bc_left),   Int(idx_bc_right)),
-                    (Int(idx_bc_front),  Int(idx_bc_back)),
-                    (Int(idx_bc_bottom), Int(idx_bc_top))),
-        periodicity = (Bool(periodicity_x),
-                       Bool(periodicity_y),
-                       Bool(periodicity_z)),
+        boundary = (
+            (Int(idx_bc_left), Int(idx_bc_right)),
+            (Int(idx_bc_front), Int(idx_bc_back)),
+            (Int(idx_bc_bottom), Int(idx_bc_top)),
+        ),
+        periodicity = (
+            Bool(periodicity_x),
+            Bool(periodicity_y),
+            Bool(periodicity_z),
+        ),
         xmin = FT(0),
         ymin = FT(0),
         zmin = FT(0),
